@@ -594,8 +594,6 @@ function renderResult() {
       <div class="panel-list">${statsHtml}</div>
     </section>
 
-    ${renderDamageResult(r)}
-
     <section class="section">
       <h3 class="section-title">基础白字 <small>角色 + 光锥</small></h3>
       <div class="base-grid">
@@ -615,6 +613,8 @@ function renderResult() {
       <h3 class="section-title">套装效果</h3>
       <div class="set-list">${setHtml}</div>
     </section>
+
+    ${renderDamageResult(r)}
 
     <p class="hint">条件型加成（如「对负面状态敌人增伤」）不会自动计入，请用「手动增益」补正。</p>
   `;
