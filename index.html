@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>崩坏：星穹铁道 · 角色数据模拟器</title>
+    <meta
+      name="description"
+      content="崩坏：星穹铁道角色面板计算器：角色、光锥、行迹、遗器与套装，实时计算面板属性。"
+    />
+    <link rel="stylesheet" href="./assets/style.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark">✦</span>
+        <div>
+          <h1>星穹铁道 · 角色数据模拟器</h1>
+          <p class="sub">面板计算器 v0.1 · 数据来自 StarRailRes</p>
+        </div>
+      </div>
+      <div class="topbar-actions">
+        <span id="data-version" class="version">数据加载中…</span>
+        <button id="share-btn" class="btn" type="button">复制分享链接</button>
+      </div>
+    </header>
+
+    <main class="layout">
+      <aside class="sidebar" id="sidebar">
+        <div class="loading">加载中…</div>
+      </aside>
+      <section class="config" id="config"></section>
+      <aside class="result" id="result"></aside>
+    </main>
+
+    <div id="toast" class="toast"></div>
+
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>
