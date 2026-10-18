@@ -166,6 +166,11 @@ export function computePanel(db, state) {
   apply(acc, 'SPRatioBase', pct(buffs.err), '手动增益');
   apply(acc, 'BreakDamageAddedRatioBase', pct(buffs.be), '手动增益');
 
+  // 5) 额外属性（用于词条收益排行等临时模拟）
+  for (const extra of state.extraProperties ?? []) {
+    apply(acc, extra.type, Number(extra.value) || 0, extra.source ?? '额外属性');
+  }
+
   const panel = {
     hp: base.hp * (1 + acc.hpPct) + acc.hpFlat,
     atk: base.atk * (1 + acc.atkPct) + acc.atkFlat,

@@ -700,3 +700,97 @@ select:focus {
   border-radius: 6px;
   padding: 1px 6px;
 }
+
+/* ---------- v0.3 词条收益 ---------- */
+.gain-list {
+  display: grid;
+  gap: 8px;
+}
+
+.gain-row {
+  display: grid;
+  grid-template-columns: 76px 64px minmax(0, 1fr) 62px;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.gain-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gain-value {
+  color: var(--dim);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.gain-bar {
+  height: 5px;
+}
+
+.gain-pct {
+  color: var(--good);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+/* ---------- v0.3 配装对比 ---------- */
+.diff-table {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.diff-head,
+.diff-row {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr) minmax(0, 1fr) 72px;
+  align-items: center;
+  gap: 8px;
+}
+
+.diff-head {
+  color: var(--dim);
+  font-size: 11px;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 6px;
+}
+
+.diff-row {
+  color: var(--muted);
+}
+
+.diff-row > span:nth-child(2),
+.diff-row > span:nth-child(3),
+.diff-row > span:nth-child(4) {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.diff-row > span:nth-child(2) {
+  color: var(--text);
+}
+
+.diff-damage {
+  border-top: 1px dashed var(--line);
+  padding-top: 6px;
+  color: var(--text);
+}
+
+.delta-pos {
+  color: var(--good);
+}
+
+.delta-neg {
+  color: var(--bad);
+}
+
+.diff-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}

@@ -87,7 +87,9 @@ export function computeDamage(panelResult, skill, opts) {
   const common = base * dmgMul * defMul * resMul * vulnMul * redMul * toughnessMul;
   const nonCrit = common;
   const crit = common * critMul;
-  const expected = common * (1 + panel.cr * panel.cd);
+  // 暴击率上限 100%，期望伤害按有效暴击率计算
+  const effectiveCr = Math.min(1, Math.max(0, panel.cr));
+  const expected = common * (1 + effectiveCr * panel.cd);
 
   return {
     element,

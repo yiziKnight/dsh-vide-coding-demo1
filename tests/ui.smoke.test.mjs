@@ -106,4 +106,10 @@ test('首屏渲染与角色切换（jsdom 冒烟测试）', async () => {
   danheng.click();
   await waitFor(() => document.querySelector('.variant-box') !== null);
   assert.match(document.querySelector('.variant-box summary').textContent, /变体技能/);
+
+  // 11. v0.3 词条收益卡 + 快照对比
+  assert.ok(document.querySelector('.gain-list'), '词条收益应渲染');
+  document.querySelector('[data-action="snapshot"]').click();
+  await waitFor(() => document.querySelector('.diff-table') !== null);
+  assert.ok(document.querySelector('.diff-head'), '快照对比表应出现');
 });

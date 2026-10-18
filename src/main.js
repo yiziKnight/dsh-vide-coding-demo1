@@ -11,6 +11,7 @@ import {
   DEFAULT_ENEMY,
   formatDamage,
 } from './core/damage.js';
+import { substatGains, compareWithSnapshot, snapshotState } from './core/compare.js';
 import {
   ascensionForLevel,
   RELIC_SLOTS,
@@ -130,6 +131,51 @@ function currentSkillPool(char) {
 function levelForSkill(char, skill) {
   const canon = currentMainSkills(char).find((s) => s.type === skill.type) ?? skill;
   return state.traceLevels[canon.id] ?? skill.maxLevel;
+}
+
+/** 当前伤害模拟的上下文（技能 / 等级 / 倍率） */
+function currentDamageSetup(char) {
+  const pool = currentSkillPool(char).all.filter((s) => (s.params?.length ?? 0) > 0);
+  const skill = pool.find((s) => s.id === state.damageSkillId) ?? pool[0];
+  if (!skill) return null;
+  const level = levelForSkill(char, skill);
+  const multipliers = skillMultipliers(skill, level);
+  const idx = Math.min(state.damageParamIndex ?? 0, Math.max(0, multipliers.length - 1));
+  const multiplier = state.damageMultiplier != null ? state.damageMultiplier / 100 : (multipliers[idx] ?? 0);
+  return { skill, level, multiplier };
+}
+
+/* ------------------------------------------------------------------ */
+/* 快照（localStorage）                                                */
+/* ------------------------------------------------------------------ */
+
+const SNAPSHOT_KEY = 'dsh-hsr-snapshot-v1';
+
+function loadSnapshot() {
+  try {
+    const raw = localStorage.getItem(SNAPSHOT_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveSnapshot() {
+  state.snapshot = snapshotState(state);
+  try {
+    localStorage.setItem(SNAPSHOT_KEY, JSON.stringify(state.snapshot));
+  } catch {
+    /* 忽略存储异常 */
+  }
+}
+
+function clearSnapshot() {
+  state.snapshot = null;
+  try {
+    localStorage.removeItem(SNAPSHOT_KEY);
+  } catch {
+    /* 忽略 */
+  }
 }
 
 function firstDamageSkillId(char, skills) {
@@ -670,6 +716,9 @@ function renderResult() {
       <div class="set-list">${setHtml}</div>
     </section>
 
+    ${renderGainCard(r, char)}
+    ${renderCompareCard(r, char)}
+
     ${renderDamageResult(r)}
 
     <p class="hint">条件型加成（如「对负面状态敌人增伤」）不会自动计入，请用「手动增益」补正。</p>
@@ -715,6 +764,110 @@ function renderDamageResult(panelResult) {
         韧性 ${dmg.toughnessMul.toFixed(2)}
       </p>
       <p class="hint">敌方默认 20% 抗性；直伤公式不含击破伤害与持续伤害。</p>
+    </section>`;
+}
+
+/* ------------------------------------------------------------------ */
+/* v0.3 配装收益：词条排行 + 快照对比                                   */
+/* ------------------------------------------------------------------ */
+
+function formatPanelNumber(value, kind, digits) {
+  if (!Number.isFinite(value)) return '—';
+  if (kind === 'percent') return `${(value * 100).toFixed(digits ?? 1)}%`;
+  return value.toFixed(digits ?? 0);
+}
+
+/** 词条收益排行卡 */
+function renderGainCard(panelResult, char) {
+  const setup = currentDamageSetup(char);
+  if (!setup) return '';
+  const gains = substatGains(db, state, panelResult, {
+    level: state.level,
+    multiplier: setup.multiplier,
+    enemy: state.enemy,
+    skill: setup.skill,
+  });
+  const top = gains.slice(0, 8);
+  const max = Math.max(...top.map((g) => g.deltaPct), 1e-9);
+
+  return `
+    <section class="section">
+      <h3 class="section-title">词条收益 <small>+1 词条的期望伤害提升</small></h3>
+      <div class="gain-list">
+        ${top
+          .map(
+            (g) => `
+          <div class="gain-row">
+            <span class="gain-name">${escapeHtml(g.name)}${g.percent ? '%' : ''}</span>
+            <span class="gain-value">${g.percent ? `+${(g.value * 100).toFixed(2)}%` : `+${g.value.toFixed(1)}`}</span>
+            <div class="bar gain-bar"><i style="width:${Math.max(0, (g.deltaPct / max) * 100).toFixed(1)}%"></i></div>
+            <span class="gain-pct">${g.deltaPct >= 0 ? '+' : ''}${(g.deltaPct * 100).toFixed(2)}%</span>
+          </div>`,
+          )
+          .join('')}
+      </div>
+      <p class="hint">按「1 个五星词条（单次强化最大值）」计算，基于当前技能与敌方参数。</p>
+    </section>`;
+}
+
+/** 配装快照对比卡 */
+function renderCompareCard(panelResult, char) {
+  const setup = currentDamageSetup(char);
+  const opts = setup
+    ? { level: state.level, multiplier: setup.multiplier, enemy: state.enemy, skill: setup.skill }
+    : null;
+  const cmp = compareWithSnapshot(db, state, panelResult, opts);
+
+  if (!cmp) {
+    return `
+      <section class="section">
+        <h3 class="section-title">配装对比 <small>当前 vs 快照</small></h3>
+        <p class="hint">保存当前配装作为快照，之后修改配装即可看到差异（存于浏览器本地）。</p>
+        <button class="btn" type="button" data-action="snapshot">保存当前方案</button>
+      </section>`;
+  }
+
+  const deltaText = (row) => {
+    const d = row.delta;
+    const text = row.kind === 'percent' ? `${(d * 100).toFixed(2)}%` : d.toFixed(row.digits ?? 0);
+    return `${d > 0 ? '+' : ''}${text}`;
+  };
+  const deltaClass = (d) => (d > 0.0001 ? 'delta-pos' : d < -0.0001 ? 'delta-neg' : '');
+
+  return `
+    <section class="section">
+      <h3 class="section-title">配装对比 <small>当前 vs 快照</small></h3>
+      <div class="diff-table">
+        <div class="diff-head"><span>属性</span><span>当前</span><span>快照</span><span>差值</span></div>
+        ${cmp.rows
+          .map(
+            (row) => `
+          <div class="diff-row">
+            <span>${row.label}</span>
+            <span>${formatPanelNumber(row.current, row.kind, row.digits)}</span>
+            <span>${formatPanelNumber(row.snapshot, row.kind, row.digits)}</span>
+            <span class="${deltaClass(row.delta)}">${deltaText(row)}</span>
+          </div>`,
+          )
+          .join('')}
+        ${
+          cmp.currentDamage && cmp.snapshotDamage
+            ? `
+          <div class="diff-row diff-damage">
+            <span>期望伤害</span>
+            <span>${formatDamage(cmp.currentDamage.expected)}</span>
+            <span>${formatDamage(cmp.snapshotDamage.expected)}</span>
+            <span class="${deltaClass(cmp.currentDamage.expected - cmp.snapshotDamage.expected)}">
+              ${cmp.snapshotDamage.expected ? ((cmp.currentDamage.expected / cmp.snapshotDamage.expected - 1) * 100).toFixed(2) + '%' : '—'}
+            </span>
+          </div>`
+            : ''
+        }
+      </div>
+      <div class="diff-actions">
+        <button class="btn" type="button" data-action="snapshot">更新快照</button>
+        <button class="btn" type="button" data-action="clear-snapshot">清除快照</button>
+      </div>
     </section>`;
 }
 
@@ -927,6 +1080,20 @@ function onClick(e) {
     return;
   }
 
+  const action = e.target.closest('[data-action]')?.dataset.action;
+  if (action === 'snapshot') {
+    saveSnapshot();
+    renderResult();
+    toast('已保存配装快照');
+    return;
+  }
+  if (action === 'clear-snapshot') {
+    clearSnapshot();
+    renderResult();
+    toast('已清除配装快照');
+    return;
+  }
+
   if (e.target.id === 'share-btn') {
     copyShareLink();
   }
@@ -1042,6 +1209,7 @@ async function boot() {
 
   state = defaultState();
   restoreFromUrl();
+  state.snapshot = loadSnapshot();
 
   const v = db.version;
   $id('data-version').textContent = `数据 ${v.counts.characters} 角色 · ${v.counts.lightCones} 光锥 · 快照 ${v.snapshot.slice(0, 10)}`;

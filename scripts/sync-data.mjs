@@ -181,6 +181,7 @@ function buildRelics(relics, sets, mainAffixes, subAffixes) {
       type: a.property,
       base: a.base,
       step: a.step,
+      stepNum: a.step_num,
     }));
   }
 

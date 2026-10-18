@@ -1,6 +1,6 @@
 {
   "name": "dsh-hsr-panel-calculator",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "description": "崩坏：星穹铁道 角色数据模拟器 —— 零依赖静态面板计算器 + 伤害模拟",
@@ -8,8 +8,8 @@
   "scripts": {
     "start": "python -m http.server 8000",
     "serve": "python -m http.server 8000",
-    "test": "node --test tests/stats.test.mjs tests/damage.test.mjs tests/skills.test.mjs tests/ui.smoke.test.mjs",
-    "test:core": "node --test tests/stats.test.mjs tests/damage.test.mjs tests/skills.test.mjs",
+    "test": "node --test tests/stats.test.mjs tests/damage.test.mjs tests/skills.test.mjs tests/compare.test.mjs tests/ui.smoke.test.mjs",
+    "test:core": "node --test tests/stats.test.mjs tests/damage.test.mjs tests/skills.test.mjs tests/compare.test.mjs",
     "sync": "node scripts/sync-data.mjs"
   },
   "engines": {
