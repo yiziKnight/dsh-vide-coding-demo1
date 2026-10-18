@@ -3,6 +3,8 @@
 > 崩坏：星穹铁道角色**面板计算器** —— 选角色、光锥、行迹、遗器，实时算出站街面板。
 > 零依赖、零构建，纯静态网页，直接 GitHub Pages 托管。
 
+🌐 **在线体验**：<https://yiziknight.github.io/dsh-vide-coding-demo1/>
+
 ![界面预览](docs/preview.png)
 
 ## ✨ 功能
