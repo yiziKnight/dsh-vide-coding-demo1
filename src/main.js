@@ -6,6 +6,12 @@
 import { loadGameData, propertyName, propertyIsPercent } from './core/data.js';
 import { computePanel, relicMainValue } from './core/stats.js';
 import {
+  computeDamage,
+  skillMultipliers,
+  DEFAULT_ENEMY,
+  formatDamage,
+} from './core/damage.js';
+import {
   ascensionForLevel,
   RELIC_SLOTS,
   PANEL_ROWS,
@@ -56,6 +62,10 @@ function defaultState() {
     buffs: {},
     minorEnabled: {},
     traceLevels,
+    enemy: { ...DEFAULT_ENEMY },
+    damageSkillId: firstDamageSkillId(char),
+    damageParamIndex: 0,
+    damageMultiplier: null,
   };
 }
 
@@ -72,6 +82,9 @@ function switchCharacter(characterId) {
   state.traceLevels = {};
   for (const s of char.skills) state.traceLevels[s.id] = s.maxLevel;
   state.minorEnabled = {};
+  state.damageSkillId = firstDamageSkillId(char);
+  state.damageParamIndex = 0;
+  state.damageMultiplier = null;
   renderAll();
 }
 
@@ -87,6 +100,21 @@ const stars = (n) => '★'.repeat(n);
 /** 行迹里的技能类型（数据里是 Normal / BPSkill / Ultra / Talent） */
 const SKILL_TYPES = ['Normal', 'BPSkill', 'Ultra', 'Talent'];
 const SKILL_LABELS = { Normal: '普攻', BPSkill: '战技', Ultra: '终结技', Talent: '天赋' };
+
+/** 伤害模拟里优先展示的技能类型顺序 */
+const DAMAGE_SKILL_ORDER = ['BPSkill', 'Ultra', 'Normal', 'Talent'];
+
+/** 敌方参数的百分比字段（内部存小数） */
+const ENEMY_PERCENT_FIELDS = ['res', 'resPen', 'defShred', 'defIgnore', 'vulnerability', 'dmgReduction'];
+
+function firstDamageSkillId(char) {
+  const list = (char?.skills ?? []).filter((s) => SKILL_TYPES.includes(s.type));
+  for (const type of DAMAGE_SKILL_ORDER) {
+    const found = list.find((s) => s.type === type && (s.params?.length ?? 0) > 0);
+    if (found) return found.id;
+  }
+  return list[0]?.id ?? '';
+}
 
 function elementMeta(element) {
   return { name: db.meta.elements[element]?.name ?? element, color: db.meta.elements[element]?.color ?? '#888' };
@@ -271,7 +299,7 @@ function renderConfig() {
           })
           .join('')}
       </div>
-      <p class="hint">技能等级目前仅作展示（v0.2 伤害模拟会用到），面板计算不计入技能倍率。</p>
+      <p class="hint">技能等级会用于「伤害模拟」的倍率取用，面板计算本身不计技能倍率。</p>
       <div class="minor-traces">
         ${char.traces
           .map((t) => {
@@ -308,7 +336,102 @@ function renderConfig() {
         }).join('')}
       </div>
     </section>
+
+    ${renderDamageConfig(char)}
   `;
+}
+
+/** 伤害模拟的输入区 */
+function renderDamageConfig(char) {
+  const skills = char.skills.filter((s) => SKILL_TYPES.includes(s.type) && (s.params?.length ?? 0) > 0);
+  const skill = skills.find((s) => s.id === state.damageSkillId) ?? skills[0];
+  if (!skill) return '';
+
+  const level = state.traceLevels[skill.id] ?? skill.maxLevel;
+  const multipliers = skillMultipliers(skill, level);
+  const paramIndex = Math.min(state.damageParamIndex ?? 0, Math.max(0, multipliers.length - 1));
+  const autoMultiplier = multipliers[paramIndex] ?? 0;
+  const override = state.damageMultiplier;
+
+  const pct = (key) => (Number(state.enemy[key] ?? 0) * 100).toFixed(1);
+
+  return `
+    <section class="section">
+      <h3 class="section-title">伤害模拟 <small>直伤公式 · v0.2</small></h3>
+
+      <div class="field">
+        <label>技能</label>
+        <select data-damage-skill>
+          ${skills
+            .map(
+              (s) =>
+                `<option value="${s.id}"${s.id === skill.id ? ' selected' : ''}>${SKILL_LABELS[s.type] ?? s.type} · ${escapeHtml(s.name)}</option>`,
+            )
+            .join('')}
+        </select>
+      </div>
+
+      <div class="field">
+        <label>倍率段</label>
+        <select data-damage-param>
+          ${
+            multipliers.length
+              ? multipliers
+                  .map(
+                    (v, i) =>
+                      `<option value="${i}"${i === paramIndex ? ' selected' : ''}>第 ${i + 1} 段 · ${(v * 100).toFixed(1)}%</option>`,
+                  )
+                  .join('')
+              : '<option value="0">该技能无倍率数据</option>'
+          }
+        </select>
+      </div>
+
+      <div class="field">
+        <label>倍率 %</label>
+        <input type="number" step="any" placeholder="自动：${(autoMultiplier * 100).toFixed(1)}"
+               value="${override == null ? '' : override}" data-damage-multiplier />
+      </div>
+
+      <p class="hint">技能等级跟随「行迹」设置（当前 Lv.${level}）；倍率留空则使用数据表自动值。</p>
+
+      <div class="relic-grid">
+        <div class="field">
+          <label>敌方等级</label>
+          <input type="number" min="1" max="100" value="${state.enemy.level}" data-enemy="level" />
+        </div>
+        <div class="field">
+          <label>抗性 %</label>
+          <input type="number" step="any" value="${pct('res')}" data-enemy="res" />
+        </div>
+        <div class="field">
+          <label>穿透 %</label>
+          <input type="number" step="any" value="${pct('resPen')}" data-enemy="resPen" />
+        </div>
+        <div class="field">
+          <label>减防 %</label>
+          <input type="number" step="any" value="${pct('defShred')}" data-enemy="defShred" />
+        </div>
+        <div class="field">
+          <label>无视防御 %</label>
+          <input type="number" step="any" value="${pct('defIgnore')}" data-enemy="defIgnore" />
+        </div>
+        <div class="field">
+          <label>易伤 %</label>
+          <input type="number" step="any" value="${pct('vulnerability')}" data-enemy="vulnerability" />
+        </div>
+        <div class="field">
+          <label>减伤 %</label>
+          <input type="number" step="any" value="${pct('dmgReduction')}" data-enemy="dmgReduction" />
+        </div>
+        <div class="field">
+          <label>韧性</label>
+          <label class="minor-chip${state.enemy.broken ? ' on' : ''}" style="width:100%">
+            <input type="checkbox" data-enemy-broken ${state.enemy.broken ? 'checked' : ''} /> 已击破
+          </label>
+        </div>
+      </div>
+    </section>`;
 }
 
 function renderRelicCard(slot) {
@@ -471,6 +594,8 @@ function renderResult() {
       <div class="panel-list">${statsHtml}</div>
     </section>
 
+    ${renderDamageResult(r)}
+
     <section class="section">
       <h3 class="section-title">基础白字 <small>角色 + 光锥</small></h3>
       <div class="base-grid">
@@ -493,6 +618,48 @@ function renderResult() {
 
     <p class="hint">条件型加成（如「对负面状态敌人增伤」）不会自动计入，请用「手动增益」补正。</p>
   `;
+}
+
+/** 伤害模拟的结果区 */
+function renderDamageResult(panelResult) {
+  const { char } = panelResult;
+  const skills = char.skills.filter((s) => SKILL_TYPES.includes(s.type) && (s.params?.length ?? 0) > 0);
+  const skill = skills.find((s) => s.id === state.damageSkillId) ?? skills[0];
+  if (!skill) return '';
+
+  const level = state.traceLevels[skill.id] ?? skill.maxLevel;
+  const multipliers = skillMultipliers(skill, level);
+  const idx = Math.min(state.damageParamIndex ?? 0, Math.max(0, multipliers.length - 1));
+  const multiplier = state.damageMultiplier != null ? state.damageMultiplier / 100 : (multipliers[idx] ?? 0);
+
+  const dmg = computeDamage(panelResult, skill, {
+    level: state.level,
+    multiplier,
+    enemy: state.enemy,
+  });
+
+  return `
+    <section class="section">
+      <h3 class="section-title">伤害模拟 <small>${escapeHtml(SKILL_LABELS[skill.type] ?? '')} · ${escapeHtml(skill.name)} Lv.${level}</small></h3>
+      <div class="base-grid">
+        <div class="base-item">不暴击<b>${formatDamage(dmg.nonCrit)}</b></div>
+        <div class="base-item">暴击<b>${formatDamage(dmg.crit)}</b></div>
+      </div>
+      <div class="base-grid" style="margin-top:8px">
+        <div class="base-item">期望伤害<b>${formatDamage(dmg.expected)}</b></div>
+        <div class="base-item">技能倍率<b>${(dmg.multiplier * 100).toFixed(1)}%</b></div>
+      </div>
+      <p class="hint">
+        基础 ${formatDamage(dmg.base)}（${dmg.scalingLabel} ${formatDamage(dmg.statValue)}） ·
+        增伤 ${(dmg.dmgMul * 100).toFixed(1)}% ·
+        防御 ${dmg.defMul.toFixed(3)} ·
+        抗性 ${dmg.resMul.toFixed(2)} ·
+        易伤 ${dmg.vulnMul.toFixed(2)} ·
+        减伤 ${dmg.redMul.toFixed(2)} ·
+        韧性 ${dmg.toughnessMul.toFixed(2)}
+      </p>
+      <p class="hint">敌方默认 20% 抗性；直伤公式不含击破伤害与持续伤害。</p>
+    </section>`;
 }
 
 /* ------------------------------------------------------------------ */
@@ -569,6 +736,22 @@ function onInput(e) {
     return;
   }
 
+  if (t.dataset.enemy) {
+    const key = t.dataset.enemy;
+    const num = Number(t.value) || 0;
+    state.enemy[key] = ENEMY_PERCENT_FIELDS.includes(key) ? num / 100 : num;
+    renderResult();
+    saveUrl();
+    return;
+  }
+
+  if (t.dataset.damageMultiplier !== undefined) {
+    state.damageMultiplier = t.value === '' ? null : Number(t.value);
+    renderResult();
+    saveUrl();
+    return;
+  }
+
   if (t.dataset.buff) {
     state.buffs[t.dataset.buff] = Number(t.value) || 0;
     renderResult();
@@ -639,6 +822,32 @@ function onChange(e) {
     renderConfig();
     renderResult();
     saveUrl();
+    return;
+  }
+
+  if (t.dataset.damageSkill !== undefined) {
+    state.damageSkillId = t.value;
+    state.damageParamIndex = 0;
+    state.damageMultiplier = null;
+    renderConfig();
+    renderResult();
+    saveUrl();
+    return;
+  }
+
+  if (t.dataset.damageParam !== undefined) {
+    state.damageParamIndex = Number(t.value);
+    renderConfig();
+    renderResult();
+    saveUrl();
+    return;
+  }
+
+  if (t.dataset.enemyBroken !== undefined) {
+    state.enemy.broken = t.checked;
+    t.closest('.minor-chip')?.classList.toggle('on', t.checked);
+    renderResult();
+    saveUrl();
   }
 }
 
@@ -672,6 +881,10 @@ function saveUrl() {
         b: state.buffs,
         m: state.minorEnabled,
         t: state.traceLevels,
+        e: state.enemy,
+        ds: state.damageSkillId,
+        dp: state.damageParamIndex,
+        dm: state.damageMultiplier,
         r: Object.fromEntries(
           Object.entries(state.relics).map(([k, r]) => [
             k,
@@ -702,6 +915,10 @@ function restoreFromUrl() {
     state.buffs = p.b ?? {};
     state.minorEnabled = p.m ?? {};
     state.traceLevels = p.t ?? {};
+    state.enemy = { ...DEFAULT_ENEMY, ...(p.e ?? {}) };
+    state.damageSkillId = p.ds ?? firstDamageSkillId(db.charById.get(state.characterId));
+    state.damageParamIndex = p.dp ?? 0;
+    state.damageMultiplier = p.dm ?? null;
     if (p.r) {
       for (const slot of RELIC_SLOTS) {
         const saved = p.r[slot.key];

@@ -80,4 +80,16 @@ test('首屏渲染与角色切换（jsdom 冒烟测试）', async () => {
   // 7. 状态已序列化进 URL（分享链接）
   await new Promise((r) => setTimeout(r, 350));
   assert.ok(dom.window.location.hash.length > 10, '状态应写入 URL hash');
+
+  // 8. 伤害模拟结果区渲染（v0.2）
+  const damageTitle = [...document.querySelectorAll('.result .section-title')].find((t) =>
+    t.textContent.includes('伤害模拟'),
+  );
+  assert.ok(damageTitle, '伤害模拟结果应渲染');
+  const damageSection = damageTitle.closest('.section');
+  const damageValues = [...damageSection.querySelectorAll('.base-item b')].map((b) =>
+    Number(b.textContent.replace(/[^\d.]/g, '')),
+  );
+  assert.ok(damageValues.length >= 3, '应展示不暴击/暴击/期望伤害');
+  assert.ok(damageValues.every((v) => v > 0), '伤害数值应为正数');
 });
