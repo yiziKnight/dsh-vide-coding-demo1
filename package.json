@@ -8,8 +8,8 @@
   "scripts": {
     "start": "python -m http.server 8000",
     "serve": "python -m http.server 8000",
-    "test": "node --test tests/stats.test.mjs tests/damage.test.mjs tests/ui.smoke.test.mjs",
-    "test:core": "node --test tests/stats.test.mjs tests/damage.test.mjs",
+    "test": "node --test tests/stats.test.mjs tests/damage.test.mjs tests/skills.test.mjs tests/ui.smoke.test.mjs",
+    "test:core": "node --test tests/stats.test.mjs tests/damage.test.mjs tests/skills.test.mjs",
     "sync": "node scripts/sync-data.mjs"
   },
   "engines": {

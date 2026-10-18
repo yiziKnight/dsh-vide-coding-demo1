@@ -92,4 +92,18 @@ test('首屏渲染与角色切换（jsdom 冒烟测试）', async () => {
   );
   assert.ok(damageValues.length >= 3, '应展示不暴击/暴击/期望伤害');
   assert.ok(damageValues.every((v) => v > 0), '伤害数值应为正数');
+
+  // 9. 加强角色显示「加强前 / 加强后」模板切换
+  const walter = [...document.querySelectorAll('.char-item')].find((i) => i.textContent.includes('瓦尔特'));
+  walter.click();
+  await waitFor(() => document.querySelectorAll('[data-skill-mode]').length === 2);
+  document.querySelector('[data-skill-mode="enhanced"]').click();
+  await waitFor(() => document.querySelector('[data-skill-mode="enhanced"]').classList.contains('active'));
+  assert.ok(document.querySelector('[data-skill-mode="base"]'), '应保留加强前按钮');
+
+  // 10. 有变体的角色出现「变体技能」折叠区
+  const danheng = [...document.querySelectorAll('.char-item')].find((i) => i.textContent.includes('丹恒•饮月'));
+  danheng.click();
+  await waitFor(() => document.querySelector('.variant-box') !== null);
+  assert.match(document.querySelector('.variant-box summary').textContent, /变体技能/);
 });

@@ -66,6 +66,7 @@ function defaultState() {
     damageSkillId: firstDamageSkillId(char),
     damageParamIndex: 0,
     damageMultiplier: null,
+    skillMode: 'base',
   };
 }
 
@@ -82,6 +83,7 @@ function switchCharacter(characterId) {
   state.traceLevels = {};
   for (const s of char.skills) state.traceLevels[s.id] = s.maxLevel;
   state.minorEnabled = {};
+  state.skillMode = 'base';
   state.damageSkillId = firstDamageSkillId(char);
   state.damageParamIndex = 0;
   state.damageMultiplier = null;
@@ -107,10 +109,33 @@ const DAMAGE_SKILL_ORDER = ['BPSkill', 'Ultra', 'Normal', 'Talent'];
 /** 敌方参数的百分比字段（内部存小数） */
 const ENEMY_PERCENT_FIELDS = ['res', 'resPen', 'defShred', 'defIgnore', 'vulnerability', 'dmgReduction'];
 
-function firstDamageSkillId(char) {
-  const list = (char?.skills ?? []).filter((s) => SKILL_TYPES.includes(s.type));
+/** 当前技能模板：加强前 base / 加强后 enhanced */
+function currentSkillMode(char) {
+  return char.hasEnhancement && state.skillMode === 'enhanced' ? 'enhanced' : 'base';
+}
+
+/** 当前模板下的四个主行迹技能 */
+function currentMainSkills(char) {
+  return currentSkillMode(char) === 'enhanced' ? char.enhancedSkills : char.mainSkills;
+}
+
+/** 当前模板下可选的技能池（主技能 + 变体） */
+function currentSkillPool(char) {
+  const main = currentMainSkills(char);
+  const variants = char.variantSkills ?? [];
+  return { main, variants, all: [...main, ...variants] };
+}
+
+/** 变体技能与同类型主技能共享等级 */
+function levelForSkill(char, skill) {
+  const canon = currentMainSkills(char).find((s) => s.type === skill.type) ?? skill;
+  return state.traceLevels[canon.id] ?? skill.maxLevel;
+}
+
+function firstDamageSkillId(char, skills) {
+  const list = (skills ?? char?.mainSkills ?? []).filter((s) => (s.params?.length ?? 0) > 0);
   for (const type of DAMAGE_SKILL_ORDER) {
-    const found = list.find((s) => s.type === type && (s.params?.length ?? 0) > 0);
+    const found = list.find((s) => s.type === type);
     if (found) return found.id;
   }
   return list[0]?.id ?? '';
@@ -203,7 +228,7 @@ function updateCharList() {
             <button class="char-item${active}" data-character="${c.id}">
               <span class="char-avatar" style="color:${em.color};border-color:${em.color}44">${escapeHtml(c.name.slice(0, 1))}</span>
               <span class="char-meta">
-                <span class="char-name">${escapeHtml(c.name)}</span>
+                <span class="char-name">${escapeHtml(c.name)}${c.hasEnhancement ? '<span class="char-badge">加强</span>' : ''}</span>
                 <span class="char-tags">
                   <span class="stars">${stars(c.rarity)}</span>
                   <span>${escapeHtml(pathName(c.path))}</span>
@@ -226,6 +251,8 @@ function renderConfig() {
   const char = db.charById.get(state.characterId);
   const asc = ascensionForLevel(state.level);
   const range = ASCENSION_RANGES[asc];
+  const mainSkills = currentMainSkills(char);
+  const variants = char.variantSkills ?? [];
 
   const lcOptions = db.lightcones
     .filter((lc) => lc.path === char.path)
@@ -244,6 +271,19 @@ function renderConfig() {
         </div>
       </div>
       <p class="hint" id="asc-hint">晋阶 ${asc} · 等级区间 ${range[0]}–${range[1]}</p>
+      ${
+        char.hasEnhancement
+          ? `
+      <div class="field" style="margin-top:10px">
+        <label>技能模板</label>
+        <div class="chips">
+          <button class="chip ${currentSkillMode(char) === 'base' ? 'active' : ''}" data-skill-mode="base">加强前</button>
+          <button class="chip ${currentSkillMode(char) === 'enhanced' ? 'active' : ''}" data-skill-mode="enhanced">加强后</button>
+        </div>
+      </div>
+      <p class="hint">该角色拥有「加强前 / 加强后」两套技能模板，倍率与面板分开计算。</p>`
+          : ''
+      }
     </section>
 
     <section class="section">
@@ -284,8 +324,7 @@ function renderConfig() {
     <section class="section">
       <h3 class="section-title">行迹 <small>小行迹默认全部点亮</small></h3>
       <div class="trace-grid">
-        ${char.skills
-          .filter((s) => SKILL_TYPES.includes(s.type))
+        ${mainSkills
           .map((s) => {
             const lv = state.traceLevels[s.id] ?? s.maxLevel;
             return `
@@ -300,6 +339,22 @@ function renderConfig() {
           .join('')}
       </div>
       <p class="hint">技能等级会用于「伤害模拟」的倍率取用，面板计算本身不计技能倍率。</p>
+      ${
+        variants.length
+          ? `
+      <details class="variant-box">
+        <summary>变体技能（${variants.length}）· 与同类型主技能共享等级</summary>
+        <div class="variant-list">
+          ${variants
+            .map(
+              (v) =>
+                `<div class="variant-item"><span class="variant-type">${escapeHtml(SKILL_LABELS[v.type] ?? v.type)}</span><span>${escapeHtml(v.name)}</span></div>`,
+            )
+            .join('')}
+        </div>
+      </details>`
+          : ''
+      }
       <div class="minor-traces">
         ${char.traces
           .map((t) => {
@@ -343,11 +398,12 @@ function renderConfig() {
 
 /** 伤害模拟的输入区 */
 function renderDamageConfig(char) {
-  const skills = char.skills.filter((s) => SKILL_TYPES.includes(s.type) && (s.params?.length ?? 0) > 0);
-  const skill = skills.find((s) => s.id === state.damageSkillId) ?? skills[0];
+  const variants = char.variantSkills ?? [];
+  const pool = currentSkillPool(char).all.filter((s) => (s.params?.length ?? 0) > 0);
+  const skill = pool.find((s) => s.id === state.damageSkillId) ?? pool[0];
   if (!skill) return '';
 
-  const level = state.traceLevels[skill.id] ?? skill.maxLevel;
+  const level = levelForSkill(char, skill);
   const multipliers = skillMultipliers(skill, level);
   const paramIndex = Math.min(state.damageParamIndex ?? 0, Math.max(0, multipliers.length - 1));
   const autoMultiplier = multipliers[paramIndex] ?? 0;
@@ -362,10 +418,10 @@ function renderDamageConfig(char) {
       <div class="field">
         <label>技能</label>
         <select data-damage-skill>
-          ${skills
+          ${pool
             .map(
               (s) =>
-                `<option value="${s.id}"${s.id === skill.id ? ' selected' : ''}>${SKILL_LABELS[s.type] ?? s.type} · ${escapeHtml(s.name)}</option>`,
+                `<option value="${s.id}"${s.id === skill.id ? ' selected' : ''}>${SKILL_LABELS[s.type] ?? s.type} · ${escapeHtml(s.name)}${variants.includes(s) ? '（变体）' : ''}</option>`,
             )
             .join('')}
         </select>
@@ -623,11 +679,11 @@ function renderResult() {
 /** 伤害模拟的结果区 */
 function renderDamageResult(panelResult) {
   const { char } = panelResult;
-  const skills = char.skills.filter((s) => SKILL_TYPES.includes(s.type) && (s.params?.length ?? 0) > 0);
-  const skill = skills.find((s) => s.id === state.damageSkillId) ?? skills[0];
+  const pool = currentSkillPool(char).all.filter((s) => (s.params?.length ?? 0) > 0);
+  const skill = pool.find((s) => s.id === state.damageSkillId) ?? pool[0];
   if (!skill) return '';
 
-  const level = state.traceLevels[skill.id] ?? skill.maxLevel;
+  const level = levelForSkill(char, skill);
   const multipliers = skillMultipliers(skill, level);
   const idx = Math.min(state.damageParamIndex ?? 0, Math.max(0, multipliers.length - 1));
   const multiplier = state.damageMultiplier != null ? state.damageMultiplier / 100 : (multipliers[idx] ?? 0);
@@ -858,6 +914,19 @@ function onClick(e) {
     return;
   }
 
+  const modeBtn = e.target.closest('[data-skill-mode]');
+  if (modeBtn) {
+    const char = db.charById.get(state.characterId);
+    state.skillMode = modeBtn.dataset.skillMode === 'enhanced' ? 'enhanced' : 'base';
+    state.damageSkillId = firstDamageSkillId(char, currentMainSkills(char));
+    state.damageParamIndex = 0;
+    state.damageMultiplier = null;
+    renderConfig();
+    renderResult();
+    saveUrl();
+    return;
+  }
+
   if (e.target.id === 'share-btn') {
     copyShareLink();
   }
@@ -885,6 +954,7 @@ function saveUrl() {
         ds: state.damageSkillId,
         dp: state.damageParamIndex,
         dm: state.damageMultiplier,
+        sm: state.skillMode,
         r: Object.fromEntries(
           Object.entries(state.relics).map(([k, r]) => [
             k,
@@ -916,7 +986,9 @@ function restoreFromUrl() {
     state.minorEnabled = p.m ?? {};
     state.traceLevels = p.t ?? {};
     state.enemy = { ...DEFAULT_ENEMY, ...(p.e ?? {}) };
-    state.damageSkillId = p.ds ?? firstDamageSkillId(db.charById.get(state.characterId));
+    state.skillMode = p.sm === 'enhanced' ? 'enhanced' : 'base';
+    const restoredChar = db.charById.get(state.characterId);
+    state.damageSkillId = p.ds ?? firstDamageSkillId(restoredChar, currentMainSkills(restoredChar));
     state.damageParamIndex = p.dp ?? 0;
     state.damageMultiplier = p.dm ?? null;
     if (p.r) {
