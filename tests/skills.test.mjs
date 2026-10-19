@@ -9,6 +9,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { buildDb, MAIN_SKILL_TYPES } from '../src/core/data.js';
+import { computePanel } from '../src/core/stats.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (name) => JSON.parse(fs.readFileSync(path.join(ROOT, 'data', `${name}.json`), 'utf8'));
@@ -81,6 +82,34 @@ test('普通角色没有加强模板与变体', () => {
   assert.equal(himeko.hasEnhancement, false);
   assert.equal(himeko.enhancedSkills, null);
   assert.equal(himeko.variantSkills.length, 0);
+  assert.equal(himeko.mainTraces.length, 10);
+  assert.equal(himeko.enhancedTraces, null);
+});
+
+test('小行迹：每个角色 10 条，加强角色两套模板各 10 条', () => {
+  for (const char of db.characters) {
+    assert.equal(char.mainTraces.length, 10, `${char.id} ${char.name} 基础小行迹应为 10 条`);
+  }
+  const enhanced = db.characters.filter((c) => c.hasEnhancement);
+  assert.equal(enhanced.length, 10);
+  for (const char of enhanced) {
+    assert.ok(char.enhancedTraces, `${char.name} 应有加强套小行迹`);
+    assert.equal(char.enhancedTraces.length, 10, `${char.name} 加强套小行迹应为 10 条`);
+    assert.equal(char.traces.length, 20, `${char.name} 原始数据里两套并存`);
+  }
+});
+
+test('面板：切换加强模板时小行迹跟着切换（瓦尔特）', () => {
+  const baseState = { characterId: '1004', level: 80, relics: {}, buffs: {}, skillMode: 'base' };
+  const enhancedState = { ...baseState, skillMode: 'enhanced' };
+
+  const base = computePanel(db, baseState);
+  const enhanced = computePanel(db, enhancedState);
+
+  // 瓦尔特基础套小行迹给攻击%，加强套改成效果命中%
+  assert.ok(base.panel.atk > enhanced.panel.atk, '基础模板攻击力应更高');
+  assert.ok(enhanced.panel.ehr > base.panel.ehr, '加强模板效果命中应更高');
+  assert.equal(base.panel.ehr, 0);
 });
 
 test('记忆角色只算 4 条主行迹，忆灵技能不混入', () => {

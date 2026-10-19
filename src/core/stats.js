@@ -103,8 +103,10 @@ export function computePanel(db, state) {
 
   const acc = createAcc();
 
-  // 1) 行迹（小行迹，默认全部点亮）
-  for (const trace of char.traces) {
+  // 1) 行迹（小行迹，默认全部点亮；加强角色按当前技能模板取对应的一套）
+  const traces =
+    state.skillMode === 'enhanced' && char.enhancedTraces ? char.enhancedTraces : char.mainTraces;
+  for (const trace of traces) {
     if (state.minorEnabled?.[trace.id] === false) continue;
     for (const lv of trace.levels) {
       for (const [type, value] of lv.properties) apply(acc, type, value, `行迹·${trace.name || trace.id}`);

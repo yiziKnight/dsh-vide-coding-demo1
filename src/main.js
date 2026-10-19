@@ -120,6 +120,11 @@ function currentMainSkills(char) {
   return currentSkillMode(char) === 'enhanced' ? char.enhancedSkills : char.mainSkills;
 }
 
+/** 当前模板下的小行迹（加强角色两套模板各自独立，每套 10 条） */
+function currentTraces(char) {
+  return currentSkillMode(char) === 'enhanced' && char.enhancedTraces ? char.enhancedTraces : char.mainTraces;
+}
+
 /** 当前模板下可选的技能池（主技能 + 变体） */
 function currentSkillPool(char) {
   const main = currentMainSkills(char);
@@ -299,6 +304,7 @@ function renderConfig() {
   const range = ASCENSION_RANGES[asc];
   const mainSkills = currentMainSkills(char);
   const variants = char.variantSkills ?? [];
+  const traces = currentTraces(char);
 
   const lcOptions = db.lightcones
     .filter((lc) => lc.path === char.path)
@@ -368,7 +374,7 @@ function renderConfig() {
     </section>
 
     <section class="section">
-      <h3 class="section-title">行迹 <small>小行迹默认全部点亮</small></h3>
+      <h3 class="section-title">行迹 <small>${char.hasEnhancement ? (currentSkillMode(char) === 'enhanced' ? '加强后模板' : '加强前模板') + ' · ' : ''}小行迹 ${traces.length} 条</small></h3>
       <div class="trace-grid">
         ${mainSkills
           .map((s) => {
@@ -402,7 +408,7 @@ function renderConfig() {
           : ''
       }
       <div class="minor-traces">
-        ${char.traces
+        ${traces
           .map((t) => {
             const on = state.minorEnabled[t.id] !== false;
             const prop = t.levels.flatMap((lv) => lv.properties)[0];
@@ -528,7 +534,7 @@ function renderDamageConfig(char) {
         </div>
         <div class="field">
           <label>韧性</label>
-          <label class="minor-chip${state.enemy.broken ? ' on' : ''}" style="width:100%">
+          <label class="check-chip${state.enemy.broken ? ' on' : ''}" style="width:100%">
             <input type="checkbox" data-enemy-broken ${state.enemy.broken ? 'checked' : ''} /> 已击破
           </label>
         </div>
@@ -1054,7 +1060,7 @@ function onChange(e) {
 
   if (t.dataset.enemyBroken !== undefined) {
     state.enemy.broken = t.checked;
-    t.closest('.minor-chip')?.classList.toggle('on', t.checked);
+    t.closest('.check-chip')?.classList.toggle('on', t.checked);
     renderResult();
     saveUrl();
   }

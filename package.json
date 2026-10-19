@@ -1,6 +1,6 @@
 {
   "name": "dsh-hsr-panel-calculator",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "type": "module",
   "description": "崩坏：星穹铁道 角色数据模拟器 —— 零依赖静态面板计算器 + 伤害模拟",

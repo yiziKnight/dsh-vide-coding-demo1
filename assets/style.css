@@ -379,7 +379,8 @@ select:focus {
   margin-top: 10px;
 }
 
-.minor-chip {
+.minor-chip,
+.check-chip {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -393,12 +394,14 @@ select:focus {
   transition: 0.14s;
 }
 
-.minor-chip input {
+.minor-chip input,
+.check-chip input {
   accent-color: var(--accent);
   margin: 0;
 }
 
-.minor-chip.on {
+.minor-chip.on,
+.check-chip.on {
   color: var(--text);
   border-color: var(--accent-soft);
   background: rgba(139, 124, 246, 0.08);

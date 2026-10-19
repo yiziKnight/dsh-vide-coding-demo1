@@ -51,6 +51,11 @@ function decorateSkills(char) {
   char.enhancedSkills = enhancedSkills;
   char.variantSkills = base.filter((s) => !baseSkills.includes(s));
   char.hasEnhancement = !!enhancedSkills;
+
+  // 小行迹同样有两套：基础 10 条 + 「1」前缀加强版 10 条，按模板分开
+  const traceDup = char.traces.filter((t) => t.id.startsWith(enhancedPrefix));
+  char.mainTraces = traceDup.length ? char.traces.filter((t) => !t.id.startsWith(enhancedPrefix)) : char.traces;
+  char.enhancedTraces = traceDup.length ? traceDup : null;
 }
 
 /** 把原始数据整理成带索引的数据库对象 */
